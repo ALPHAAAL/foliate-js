@@ -832,13 +832,17 @@ export class Paginator extends HTMLElement {
     #onTouchMove(e) {
         const state = this.#touchState
         if (!state) return
+        if (e.touches.length > 1) {
+            // Disable pinch-zoom entirely so the WebView behaves like a
+            // native paginated reader. We intercept multi-touch gestures and
+            // prevent their default behavior instead of allowing the browser
+            // to zoom the content.
+            e.preventDefault()
+            return
+        }
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
         if (this.scrolled || state.pinched) return
-        if (e.touches.length > 1) {
-            if (this.#touchScrolled) e.preventDefault()
-            return
-        }
         const doc = this.#view?.document
         const selection = doc?.getSelection()
         // If there is an active (non-collapsed) text selection, allow the
@@ -849,7 +853,6 @@ export class Paginator extends HTMLElement {
         }
         const touch = e.changedTouches[0]
         const isStylus = touch.touchType === 'stylus'
-        if (!isStylus) e.preventDefault()
         const x = touch.screenX, y = touch.screenY
         const dx = state.x - x, dy = state.y - y
         const dt = e.timeStamp - state.t
@@ -860,24 +863,42 @@ export class Paginator extends HTMLElement {
         state.vy = dy / dt
         state.dx += dx
         state.dy += dy
+        const absDx = Math.abs(state.dx)
+        const absDy = Math.abs(state.dy)
+        const horizontalGesture = !this.#vertical && absDx >= absDy
+        const verticalGesture = this.#vertical && absDy > absDx
+        // Only treat the gesture as a scroll when it is clearly along the
+        // primary reading axis. This avoids accidental page turns when the
+        // user is swiping vertically in paginated (horizontal) mode.
+        if (!horizontalGesture && !verticalGesture) return
+        if (!isStylus) e.preventDefault()
         this.#touchScrolled = true
-        if (!this.#vertical && Math.abs(state.dx) >= Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dx) > 1)) {
+        if (!this.#vertical && !this.hasAttribute('eink') && (!isStylus || Math.abs(dx) > 1)) {
             this.scrollBy(dx, 0)
-        } else if (this.#vertical && Math.abs(state.dx) < Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dy) > 1)) {
+        } else if (this.#vertical && !this.hasAttribute('eink') && (!isStylus || Math.abs(dy) > 1)) {
             this.scrollBy(0, dy)
         }
     }
     #onTouchEnd() {
-        if (!this.#touchScrolled) return
+        const state = this.#touchState
+        if (!this.#touchScrolled || !state) return
         this.#touchScrolled = false
         if (this.scrolled) return
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at
         // anything that doesn't work
+        const absDx = Math.abs(state.dx)
+        const absDy = Math.abs(state.dy)
+        const minDistance = 10
+        const horizontalGesture = !this.#vertical && absDx >= absDy && absDx > minDistance
+        const verticalGesture = this.#vertical && absDy >= absDx && absDy > minDistance
+        // In paginated horizontal mode, ignore predominantly vertical swipes so
+        // that a swipe up/down does not navigate to the previous/next page.
+        if (!horizontalGesture && !verticalGesture) return
         requestAnimationFrame(() => {
             if (globalThis.visualViewport.scale === 1)
-                this.snap(this.#touchState.vx, this.#touchState.vy)
+                this.snap(state.vx, state.vy)
         })
     }
     // allows one to process rects as if they were LTR and horizontal

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="color-scheme" content="light dark">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data: *; frame-src blob: data:; object-src blob: data:; form-action 'none';">
 <title>E-Book Reader</title>
 <style>
@@ -23,6 +23,13 @@ body {
     height: 100%;
     font: menu;
     font-family: system-ui, sans-serif;
+}
+html, body {
+    /* Prevent the outer page itself from scrolling so that all
+     * interaction goes through the internal paginator. This makes
+     * paginated mode feel like a native reader instead of a web page
+     * that can be vertically scrolled or bounced. */
+    overflow: hidden;
 }
 #drop-target {
     height: 100vh;
