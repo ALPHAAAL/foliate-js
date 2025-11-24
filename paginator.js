@@ -825,11 +825,13 @@ export class Paginator extends HTMLElement {
         this.#touchState = {
             x: touch?.screenX, y: touch?.screenY,
             t: e.timeStamp,
-            vx: 0, xy: 0,
+            vx: 0, vy: 0,
+            dx: 0, dy: 0,
         }
     }
     #onTouchMove(e) {
         const state = this.#touchState
+        if (!state) return
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
         if (this.scrolled || state.pinched) return
@@ -837,8 +839,17 @@ export class Paginator extends HTMLElement {
             if (this.#touchScrolled) e.preventDefault()
             return
         }
-        e.preventDefault()
+        const doc = this.#view?.document
+        const selection = doc?.getSelection()
+        // If there is an active (non-collapsed) text selection, allow the
+        // browser/WebView to handle touchmove so users can adjust selection
+        // handles without accidentally triggering pagination scroll.
+        if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+            return
+        }
         const touch = e.changedTouches[0]
+        const isStylus = touch.touchType === 'stylus'
+        if (!isStylus) e.preventDefault()
         const x = touch.screenX, y = touch.screenY
         const dx = state.x - x, dy = state.y - y
         const dt = e.timeStamp - state.t
@@ -847,10 +858,17 @@ export class Paginator extends HTMLElement {
         state.t = e.timeStamp
         state.vx = dx / dt
         state.vy = dy / dt
+        state.dx += dx
+        state.dy += dy
         this.#touchScrolled = true
-        this.scrollBy(dx, dy)
+        if (!this.#vertical && Math.abs(state.dx) >= Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dx) > 1)) {
+            this.scrollBy(dx, 0)
+        } else if (this.#vertical && Math.abs(state.dx) < Math.abs(state.dy) && !this.hasAttribute('eink') && (!isStylus || Math.abs(dy) > 1)) {
+            this.scrollBy(0, dy)
+        }
     }
     #onTouchEnd() {
+        if (!this.#touchScrolled) return
         this.#touchScrolled = false
         if (this.scrolled) return
 
