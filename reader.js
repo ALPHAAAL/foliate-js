@@ -1,18 +1,45 @@
-import './view.js'
-import { createTOCView } from './ui/tree.js'
-import { createMenu } from './ui/menu.js'
 import { Overlayer } from './overlayer.js'
+import { createMenu } from './ui/menu.js'
+import { createTOCView } from './ui/tree.js'
+import './view.js'
 
-const getCSS = ({ spacing, justify, hyphenate }) => `
+const getCSS = ({ spacing, justify, hyphenate, colors, isDark }) => {
+    const background = colors?.background ?? 'Canvas'
+    const foreground = colors?.foreground ?? 'CanvasText'
+    const muted = colors?.muted ?? 'GrayText'
+    const border = colors?.border ?? 'rgba(0, 0, 0, .12)'
+    const colorScheme = typeof isDark === 'boolean'
+        ? (isDark ? 'dark' : 'light')
+        : 'light dark'
+    return `
     @namespace epub "http://www.idpf.org/2007/ops";
     html {
-        color-scheme: light dark;
+        color-scheme: ${colorScheme};
+        background: ${background};
+        color: ${foreground};
     }
     /* https://github.com/whatwg/html/issues/5426 */
     @media (prefers-color-scheme: dark) {
         a:link {
             color: lightblue;
         }
+    }
+    body {
+        background: ${background};
+        color: ${foreground};
+    }
+    a:link, a:visited {
+        color: ${foreground};
+    }
+    ::selection {
+        background: ${foreground}22;
+        color: ${background};
+    }
+    table, th, td {
+        border-color: ${border};
+    }
+    blockquote, cite, figcaption, footer, small {
+        color: ${muted};
     }
     p, li, blockquote, dd {
         line-height: ${spacing};
@@ -41,6 +68,7 @@ const getCSS = ({ spacing, justify, hyphenate }) => `
         display: none;
     }
 `
+}
 
 const $ = document.querySelector.bind(document)
 
@@ -64,10 +92,17 @@ const formatContributor = contributor => Array.isArray(contributor)
 
 class Reader {
     #tocView
+    #applyStyles = () => {
+        if (this.view?.renderer?.setStyles) {
+            this.view.renderer.setStyles(getCSS(this.style))
+        }
+    }
     style = {
         spacing: 1.4,
         justify: true,
         hyphenate: true,
+        colors: undefined,
+        isDark: undefined,
     }
     annotations = new Map()
     annotationsByValue = new Map()
@@ -102,11 +137,36 @@ class Reader {
         $('#menu-button > button').addEventListener('click', () =>
             menu.element.classList.toggle('show'))
         menu.groups.layout.select('paginated')
+
+        const initialTheme = globalThis.__auraTheme
+        if (initialTheme) {
+            this.style.colors = {
+                background: initialTheme.background,
+                foreground: initialTheme.foreground,
+                muted: initialTheme.muted,
+                border: initialTheme.border,
+            }
+            this.style.isDark = initialTheme.isDark
+        }
+
+        window.addEventListener('aura-theme-change', event => {
+            const theme = event?.detail
+            if (!theme) return
+            this.style.colors = {
+                background: theme.background,
+                foreground: theme.foreground,
+                muted: theme.muted,
+                border: theme.border,
+            }
+            this.style.isDark = theme.isDark
+            this.#applyStyles()
+        })
     }
     async open(file) {
         this.view = document.createElement('foliate-view')
         document.body.append(this.view)
         await this.view.open(file)
+        this.#applyStyles()
         this.view.addEventListener('load', this.#onLoad.bind(this))
         this.view.addEventListener('relocate', this.#onRelocate.bind(this))
 
@@ -117,7 +177,7 @@ class Reader {
                 return ''
             })
         })
-        this.view.renderer.setStyles?.(getCSS(this.style))
+        this.#applyStyles()
         this.view.renderer.next()
 
         $('#header-bar').style.visibility = 'visible'

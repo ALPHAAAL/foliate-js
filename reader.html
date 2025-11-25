@@ -6,6 +6,12 @@
 <title>E-Book Reader</title>
 <style>
 :root {
+    --foliate-background: Canvas;
+    --foliate-foreground: CanvasText;
+    --foliate-muted: GrayText;
+    --foliate-border: rgba(0, 0, 0, .1);
+    --foliate-card: Canvas;
+    --foliate-input: Canvas;
     --active-bg: rgba(0, 0, 0, .05);
 }
 @supports (color-scheme: light dark) {
@@ -23,6 +29,8 @@ body {
     height: 100%;
     font: menu;
     font-family: system-ui, sans-serif;
+    background: var(--foliate-background);
+    color: var(--foliate-foreground);
 }
 html, body {
     /* Prevent the outer page itself from scrolling so that all
@@ -71,17 +79,18 @@ html, body {
     padding: 6px;
     transition: opacity 250ms ease;
     visibility: hidden;
+    color: var(--foliate-foreground);
 }
 .toolbar button {
     padding: 3px;
     border-radius: 6px;
     background: none;
     border: 0;
-    color: GrayText;
+    color: var(--foliate-muted);
 }
 .toolbar button:hover {
-    background: rgba(0, 0, 0, .1);
-    color: currentcolor;
+    background: var(--active-bg);
+    color: var(--foliate-foreground);
 }
 #header-bar {
     top: 0;
@@ -93,6 +102,7 @@ html, body {
     flex-grow: 1;
     margin: 0 12px;
     visibility: hidden;
+    accent-color: var(--foliate-foreground);
 }
 #side-bar {
     visibility: hidden;
@@ -106,9 +116,9 @@ html, body {
     transform: translateX(-320px);
     display: flex;
     flex-direction: column;
-    background: Canvas;
-    color: CanvasText;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 40px rgba(0, 0, 0, .2);
+    background: var(--foliate-card);
+    color: var(--foliate-foreground);
+    box-shadow: 0 0 0 1px var(--foliate-border), 0 0 40px rgba(0, 0, 0, .2);
     transition: visibility 0s linear 300ms, transform 300ms ease;
 }
 #side-bar.show {
@@ -136,7 +146,7 @@ html, body {
 #side-bar-header {
     padding: 1rem;
     display: flex;
-    border-bottom: 1px solid rgba(0, 0, 0, .1);
+    border-bottom: 1px solid var(--foliate-border);
     align-items: center;
 }
 #side-bar-cover {
@@ -145,8 +155,8 @@ html, body {
     max-height: 180px;
     border-radius: 3px;
     border: 0;
-    background: lightgray;
-    box-shadow: 0 0 1px rgba(0, 0, 0, .1), 0 0 16px rgba(0, 0, 0, .1);
+    background: var(--foliate-border);
+    box-shadow: 0 0 1px var(--foliate-border), 0 0 16px rgba(0, 0, 0, .12);
     margin-inline-end: 1rem;
 }
 #side-bar-cover:not([src]) {
@@ -159,7 +169,7 @@ html, body {
 #side-bar-author {
     margin: .5rem 0;
     font-size: small;
-    color: GrayText;
+    color: var(--foliate-muted);
 }
 #toc-view {
     padding: .5rem;
@@ -177,20 +187,20 @@ html, body {
     margin: 2px 0;
 }
 #toc-view a {
-    color: CanvasText;
+    color: var(--foliate-foreground);
     text-decoration: none;
 }
 #toc-view a:hover {
     background: var(--active-bg);
 }
 #toc-view span {
-    color: GrayText;
+    color: var(--foliate-muted);
 }
 #toc-view svg {
     margin-inline-start: -24px;
     padding-inline-start: 5px;
     padding-inline-end: 6px;
-    fill: CanvasText;
+    fill: var(--foliate-foreground);
     cursor: default;
     transition: transform .2s ease;
     opacity: .5;
@@ -220,10 +230,10 @@ html, body {
     visibility: hidden;
     position: absolute;
     right: 0;
-    background: Canvas;
-    color: CanvasText;
+    background: var(--foliate-card);
+    color: var(--foliate-foreground);
     border-radius: 6px;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 16px rgba(0, 0, 0, .1);
+    box-shadow: 0 0 0 1px var(--foliate-border), 0 0 16px rgba(0, 0, 0, .12);
     padding: 6px;
     cursor: default;
 }
@@ -244,18 +254,18 @@ html, body {
     background-image: url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223%22%2F%3E%3C%2Fsvg%3E');
 }
 .popover {
-    background: Canvas;
-    color: CanvasText;
+    background: var(--foliate-card);
+    color: var(--foliate-foreground);
     border-radius: 6px;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 16px rgba(0, 0, 0, .1), 0 0 32px rgba(0, 0, 0, .1);
+    box-shadow: 0 0 0 1px var(--foliate-border), 0 0 16px rgba(0, 0, 0, .12), 0 0 32px rgba(0, 0, 0, .08);
 }
 .popover-arrow-down {
-    fill: Canvas;
-    filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .2));
+    fill: var(--foliate-card);
+    filter: drop-shadow(0 -1px 0 var(--foliate-border));
 }
 .popover-arrow-up {
-    fill: Canvas;
-    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .2));
+    fill: var(--foliate-card);
+    filter: drop-shadow(0 1px 0 var(--foliate-border));
 }
 </style>
 <input type="file" id="file-input" hidden>
