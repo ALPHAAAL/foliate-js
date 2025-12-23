@@ -130,6 +130,22 @@ class Reader {
                     this.view?.renderer.setAttribute('flow', value)
                 },
             },
+            {
+                name: 'animation',
+                label: 'Animation',
+                type: 'radio',
+                items: [
+                    ['Enabled', 'enabled'],
+                    ['Disabled', 'disabled'],
+                ],
+                onclick: value => {
+                    if (value === 'enabled') {
+                        this.view?.renderer.setAttribute('animated', '')
+                    } else {
+                        this.view?.renderer.removeAttribute('animated')
+                    }
+                },
+            },
         ])
         menu.element.classList.add('menu')
 
@@ -137,6 +153,7 @@ class Reader {
         $('#menu-button > button').addEventListener('click', () =>
             menu.element.classList.toggle('show'))
         menu.groups.layout.select('paginated')
+        menu.groups.animation.select('enabled')
 
         const initialTheme = globalThis.__auraTheme
         if (initialTheme) {
@@ -178,6 +195,8 @@ class Reader {
             })
         })
         this.#applyStyles()
+        // Enable page flip animation by default
+        this.view.renderer.setAttribute('animated', '')
         this.view.renderer.next()
 
         $('#header-bar').style.visibility = 'visible'

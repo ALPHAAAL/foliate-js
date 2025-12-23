@@ -1,3 +1,26 @@
+const easeOutCubic = x => 1 - Math.pow(1 - x, 3)
+
+const animate = (from, to, duration, ease, render) => new Promise(resolve => {
+    let start
+    const step = now => {
+        if (document.hidden) {
+            render(to)
+            return resolve()
+        }
+        start ??= now
+        const fraction = Math.min(1, (now - start) / duration)
+        const value = from + (to - from) * ease(fraction)
+        render(value)
+        if (fraction < 1) requestAnimationFrame(step)
+        else resolve()
+    }
+    if (document.hidden) {
+        render(to)
+        return resolve()
+    }
+    requestAnimationFrame(step)
+})
+
 const parseViewport = str => str
     ?.split(/[,;\s]/) // NOTE: technically, only the comma is valid
     ?.filter(x => x)
@@ -30,7 +53,7 @@ const getViewport = (doc, viewport) => {
 }
 
 export class FixedLayout extends HTMLElement {
-    static observedAttributes = ['zoom']
+    static observedAttributes = ['zoom', 'animated']
     #root = this.attachShadow({ mode: 'closed' })
     #observer = new ResizeObserver(() => this.#render())
     #spreads
@@ -43,6 +66,8 @@ export class FixedLayout extends HTMLElement {
     #center
     #side
     #zoom
+    #container
+    #animating = false
     constructor() {
         super()
 
@@ -54,8 +79,20 @@ export class FixedLayout extends HTMLElement {
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow: auto;
+            overflow: hidden;
+        }
+        #container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            position: relative;
         }`)
+
+        this.#container = document.createElement('div')
+        this.#container.id = 'container'
+        this.#root.append(this.#container)
 
         this.#observer.observe(this)
     }
@@ -86,7 +123,7 @@ export class FixedLayout extends HTMLElement {
         iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
         iframe.setAttribute('scrolling', 'no')
         iframe.setAttribute('part', 'filter')
-        this.#root.append(element)
+        this.#container.append(element)
         if (!src) return { blank: true, element, iframe }
         return new Promise(resolve => {
             iframe.addEventListener('load', () => {
@@ -163,11 +200,35 @@ export class FixedLayout extends HTMLElement {
             transform(right)
         }
     }
-    async #showSpread({ left, right, center, side }) {
-        this.#root.replaceChildren()
+    async #showSpread({ left, right, center, side, direction }) {
+        const shouldAnimate = this.hasAttribute('animated') && direction && !this.#animating
+        const oldContainer = this.#container
+
+        if (shouldAnimate) {
+            this.#animating = true
+            // Create new container for incoming spread
+            const newContainer = document.createElement('div')
+            newContainer.id = 'container'
+            Object.assign(newContainer.style, {
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: '100%',
+                height: '100%',
+                position: 'absolute',
+                top: '0',
+                left: '0',
+            })
+            this.#container = newContainer
+            this.#root.append(newContainer)
+        } else {
+            this.#container.replaceChildren()
+        }
+
         this.#left = null
         this.#right = null
         this.#center = null
+
         if (center) {
             this.#center = await this.#createFrame(center)
             this.#side = 'center'
@@ -178,6 +239,40 @@ export class FixedLayout extends HTMLElement {
             this.#side = this.#left.blank ? 'right'
                 : this.#right.blank ? 'left' : side
             this.#render()
+        }
+
+        if (shouldAnimate) {
+            const { width } = this.getBoundingClientRect()
+            const slideDistance = width * 0.3 // Slide 30% of width
+            const startOffset = direction === 'next' ? slideDistance : -slideDistance
+
+            // Position containers for animation
+            Object.assign(oldContainer.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+            })
+            this.#container.style.transform = `translateX(${startOffset}px)`
+            this.#container.style.opacity = '0'
+
+            // Animate both containers
+            await Promise.all([
+                animate(0, direction === 'next' ? -slideDistance : slideDistance, 250, easeOutCubic, x => {
+                    oldContainer.style.transform = `translateX(${x}px)`
+                    oldContainer.style.opacity = String(1 - Math.abs(x) / slideDistance)
+                }),
+                animate(startOffset, 0, 250, easeOutCubic, x => {
+                    this.#container.style.transform = `translateX(${x}px)`
+                    this.#container.style.opacity = String(1 - Math.abs(x) / slideDistance)
+                }),
+            ])
+
+            // Clean up
+            oldContainer.remove()
+            this.#container.style.position = 'relative'
+            this.#container.style.transform = ''
+            this.#container.style.opacity = ''
+            this.#animating = false
         }
     }
     #goLeft() {
@@ -262,18 +357,21 @@ export class FixedLayout extends HTMLElement {
             if (center === section) return { index, side: 'center' }
         }
     }
-    async goToSpread(index, side, reason) {
+    async goToSpread(index, side, reason, direction) {
         if (index < 0 || index > this.#spreads.length - 1) return
         if (index === this.#index) {
             this.#render(side)
             return
         }
+        const prevIndex = this.#index
         this.#index = index
+        // Determine direction if not provided
+        const dir = direction ?? (prevIndex >= 0 ? (index > prevIndex ? 'next' : 'prev') : undefined)
         const spread = this.#spreads[index]
         if (spread.center) {
             const index = this.book.sections.indexOf(spread.center)
             const src = await spread.center?.load?.()
-            await this.#showSpread({ center: { index, src } })
+            await this.#showSpread({ center: { index, src }, direction: dir })
         } else {
             const indexL = this.book.sections.indexOf(spread.left)
             const indexR = this.book.sections.indexOf(spread.right)
@@ -281,7 +379,7 @@ export class FixedLayout extends HTMLElement {
             const srcR = await spread.right?.load?.()
             const left = { index: indexL, src: srcL }
             const right = { index: indexR, src: srcR }
-            await this.#showSpread({ left, right, side })
+            await this.#showSpread({ left, right, side, direction: dir })
         }
         this.#reportLocation(reason)
     }
@@ -299,14 +397,14 @@ export class FixedLayout extends HTMLElement {
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
-        if (!s) return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
+        if (!s) return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page', 'next')
     }
     async prev() {
         const s = this.rtl ? this.#goRight() : this.#goLeft()
-        if (!s) return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
+        if (!s) return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page', 'prev')
     }
     getContents() {
-        return Array.from(this.#root.querySelectorAll('iframe'), frame => ({
+        return Array.from(this.#container.querySelectorAll('iframe'), frame => ({
             doc: frame.contentDocument,
             // TODO: index, overlayer
         }))
