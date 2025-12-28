@@ -267,6 +267,18 @@ html, body {
     fill: var(--foliate-card);
     filter: drop-shadow(0 1px 0 var(--foliate-border));
 }
+/* Headless mode: hide all UI controls when controlled by RN overlay */
+html.headless-mode #header-bar,
+html.headless-mode #nav-bar,
+html.headless-mode #side-bar,
+html.headless-mode #dimming-overlay,
+html.headless-mode #drop-target,
+html.headless-mode #file-input,
+html.headless-mode .menu {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
 </style>
 <input type="file" id="file-input" hidden>
 <div id="drop-target" class="filter">

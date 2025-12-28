@@ -3,6 +3,15 @@ import { createMenu } from './ui/menu.js'
 import { createTOCView } from './ui/tree.js'
 import './view.js'
 
+// Check for headless mode (default) vs UI mode (?ui=1 for debugging)
+const params = new URLSearchParams(location.search)
+const showUI = params.get('ui') === '1'
+
+// Set a class on the document element so CSS can hide UI elements in headless mode
+if (!showUI) {
+    document.documentElement.classList.add('headless-mode')
+}
+
 const getCSS = ({ spacing, justify, hyphenate, colors, isDark }) => {
     const background = colors?.background ?? 'Canvas'
     const foreground = colors?.foreground ?? 'CanvasText'
@@ -111,49 +120,52 @@ class Reader {
         $('#side-bar').classList.remove('show')
     }
     constructor() {
-        $('#side-bar-button').addEventListener('click', () => {
-            $('#dimming-overlay').classList.add('show')
-            $('#side-bar').classList.add('show')
-        })
-        $('#dimming-overlay').addEventListener('click', () => this.closeSideBar())
+        // Only wire up UI controls if not in headless mode
+        if (showUI) {
+            $('#side-bar-button').addEventListener('click', () => {
+                $('#dimming-overlay').classList.add('show')
+                $('#side-bar').classList.add('show')
+            })
+            $('#dimming-overlay').addEventListener('click', () => this.closeSideBar())
 
-        const menu = createMenu([
-            {
-                name: 'layout',
-                label: 'Layout',
-                type: 'radio',
-                items: [
-                    ['Paginated', 'paginated'],
-                    ['Scrolled', 'scrolled'],
-                ],
-                onclick: value => {
-                    this.view?.renderer.setAttribute('flow', value)
+            const menu = createMenu([
+                {
+                    name: 'layout',
+                    label: 'Layout',
+                    type: 'radio',
+                    items: [
+                        ['Paginated', 'paginated'],
+                        ['Scrolled', 'scrolled'],
+                    ],
+                    onclick: value => {
+                        this.view?.renderer.setAttribute('flow', value)
+                    },
                 },
-            },
-            {
-                name: 'animation',
-                label: 'Animation',
-                type: 'radio',
-                items: [
-                    ['Enabled', 'enabled'],
-                    ['Disabled', 'disabled'],
-                ],
-                onclick: value => {
-                    if (value === 'enabled') {
-                        this.view?.renderer.setAttribute('animated', '')
-                    } else {
-                        this.view?.renderer.removeAttribute('animated')
-                    }
+                {
+                    name: 'animation',
+                    label: 'Animation',
+                    type: 'radio',
+                    items: [
+                        ['Enabled', 'enabled'],
+                        ['Disabled', 'disabled'],
+                    ],
+                    onclick: value => {
+                        if (value === 'enabled') {
+                            this.view?.renderer.setAttribute('animated', '')
+                        } else {
+                            this.view?.renderer.removeAttribute('animated')
+                        }
+                    },
                 },
-            },
-        ])
-        menu.element.classList.add('menu')
+            ])
+            menu.element.classList.add('menu')
 
-        $('#menu-button').append(menu.element)
-        $('#menu-button > button').addEventListener('click', () =>
-            menu.element.classList.toggle('show'))
-        menu.groups.layout.select('paginated')
-        menu.groups.animation.select('enabled')
+            $('#menu-button').append(menu.element)
+            $('#menu-button > button').addEventListener('click', () =>
+                menu.element.classList.toggle('show'))
+            menu.groups.layout.select('paginated')
+            menu.groups.animation.select('enabled')
+        }
 
         const initialTheme = globalThis.__auraTheme
         if (initialTheme) {
@@ -199,38 +211,45 @@ class Reader {
         this.view.renderer.setAttribute('animated', '')
         this.view.renderer.next()
 
-        $('#header-bar').style.visibility = 'visible'
-        $('#nav-bar').style.visibility = 'visible'
-        $('#left-button').addEventListener('click', () => this.view.goLeft())
-        $('#right-button').addEventListener('click', () => this.view.goRight())
+        // Only wire up UI controls if not in headless mode
+        if (showUI) {
+            $('#header-bar').style.visibility = 'visible'
+            $('#nav-bar').style.visibility = 'visible'
+            $('#left-button').addEventListener('click', () => this.view.goLeft())
+            $('#right-button').addEventListener('click', () => this.view.goRight())
 
-        const slider = $('#progress-slider')
-        slider.dir = book.dir
-        slider.addEventListener('input', e =>
-            this.view.goToFraction(parseFloat(e.target.value)))
-        for (const fraction of this.view.getSectionFractions()) {
-            const option = document.createElement('option')
-            option.value = fraction
-            $('#tick-marks').append(option)
+            const slider = $('#progress-slider')
+            slider.dir = book.dir
+            slider.addEventListener('input', e =>
+                this.view.goToFraction(parseFloat(e.target.value)))
+            for (const fraction of this.view.getSectionFractions()) {
+                const option = document.createElement('option')
+                option.value = fraction
+                $('#tick-marks').append(option)
+            }
+
+            const title = formatLanguageMap(book.metadata?.title) || 'Untitled Book'
+            document.title = title
+            $('#side-bar-title').innerText = title
+            $('#side-bar-author').innerText = formatContributor(book.metadata?.author)
+            Promise.resolve(book.getCover?.())?.then(blob =>
+                blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
+
+            const toc = book.toc
+            if (toc) {
+                this.#tocView = createTOCView(toc, href => {
+                    this.view.goTo(href).catch(e => console.error(e))
+                    this.closeSideBar()
+                })
+                $('#toc-view').append(this.#tocView.element)
+            }
+        } else {
+            // In headless mode, just set the title
+            const title = formatLanguageMap(book.metadata?.title) || 'Untitled Book'
+            document.title = title
         }
 
         document.addEventListener('keydown', this.#handleKeydown.bind(this))
-
-        const title = formatLanguageMap(book.metadata?.title) || 'Untitled Book'
-        document.title = title
-        $('#side-bar-title').innerText = title
-        $('#side-bar-author').innerText = formatContributor(book.metadata?.author)
-        Promise.resolve(book.getCover?.())?.then(blob =>
-            blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
-
-        const toc = book.toc
-        if (toc) {
-            this.#tocView = createTOCView(toc, href => {
-                this.view.goTo(href).catch(e => console.error(e))
-                this.closeSideBar()
-            })
-            $('#toc-view').append(this.#tocView.element)
-        }
 
         // load and show highlights embedded in the file by Calibre
         const bookmarks = await book.getCalibreBookmarks?.()
@@ -275,20 +294,27 @@ class Reader {
     }
     #onRelocate({ detail }) {
         const { fraction, location, tocItem, pageItem } = detail
-        const percent = percentFormat.format(fraction)
-        const loc = pageItem
-            ? `Page ${pageItem.label}`
-            : `Loc ${location.current}`
-        const slider = $('#progress-slider')
-        slider.style.visibility = 'visible'
-        slider.value = fraction
-        slider.title = `${percent} · ${loc}`
-        if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
+        // Only update UI elements if not in headless mode
+        if (showUI) {
+            const percent = percentFormat.format(fraction)
+            const loc = pageItem
+                ? `Page ${pageItem.label}`
+                : `Loc ${location.current}`
+            const slider = $('#progress-slider')
+            slider.style.visibility = 'visible'
+            slider.value = fraction
+            slider.title = `${percent} · ${loc}`
+            if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
+        }
     }
 }
 
 const open = async file => {
-    document.body.removeChild($('#drop-target'))
+    // Only remove drop-target if it exists (may already be hidden in headless mode)
+    const dropTarget = $('#drop-target')
+    if (dropTarget && dropTarget.parentNode) {
+        document.body.removeChild(dropTarget)
+    }
     const reader = new Reader()
     globalThis.reader = reader
     await reader.open(file)
@@ -304,15 +330,26 @@ const dropHandler = e => {
         open(entry.isFile ? item.getAsFile() : entry).catch(e => console.error(e))
     }
 }
-const dropTarget = $('#drop-target')
-dropTarget.addEventListener('drop', dropHandler)
-dropTarget.addEventListener('dragover', dragOverHandler)
 
-$('#file-input').addEventListener('change', e =>
-    open(e.target.files[0]).catch(e => console.error(e)))
-$('#file-button').addEventListener('click', () => $('#file-input').click())
+// Only set up drop target and file input if showing UI
+if (showUI) {
+    const dropTarget = $('#drop-target')
+    dropTarget.addEventListener('drop', dropHandler)
+    dropTarget.addEventListener('dragover', dragOverHandler)
 
-const params = new URLSearchParams(location.search)
+    $('#file-input').addEventListener('change', e =>
+        open(e.target.files[0]).catch(e => console.error(e)))
+    $('#file-button').addEventListener('click', () => $('#file-input').click())
+}
+
 const url = params.get('url')
-if (url) open(url).catch(e => console.error(e))
-else dropTarget.style.visibility = 'visible'
+if (url) {
+    open(url).catch(e => console.error(e))
+} else if (showUI) {
+    // Only show drop target in UI mode
+    $('#drop-target').style.visibility = 'visible'
+}
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.__foliateOpen = open
+}
