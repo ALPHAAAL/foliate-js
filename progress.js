@@ -61,10 +61,19 @@ export class SectionProgress {
         this.sizePerLoc = sizePerLoc
         this.sizePerTimeUnit = sizePerTimeUnit
         this.sizeTotal = this.sizes.reduce((a, b) => a + b, 0)
+        // If all sizes are 0, fall back to equal distribution by section count
+        // This prevents NaN values in sectionFractions which would break seeking
+        if (this.sizeTotal === 0 && this.sizes.length > 0) {
+            const equalSize = 1
+            this.sizes = this.sizes.map(() => equalSize)
+            this.sizeTotal = this.sizes.length
+        }
         this.sectionFractions = this.#getSectionFractions()
     }
     #getSectionFractions() {
         const { sizeTotal } = this
+        // Guard against division by zero
+        if (sizeTotal === 0) return [0]
         const results = [0]
         let sum = 0
         for (const size of this.sizes) results.push((sum += size) / sizeTotal)

@@ -1045,7 +1045,10 @@ export class Paginator extends HTMLElement {
         else {
             const oldIndex = this.#index
             const onLoad = detail => {
-                this.sections[oldIndex]?.unload?.()
+                // Skip unloading if sections are preloaded for instant seeking
+                if (!this.hasAttribute('preload-sections')) {
+                    this.sections[oldIndex]?.unload?.()
+                }
                 this.setStyles(this.#styles)
                 this.dispatchEvent(new CustomEvent('load', { detail }))
             }
