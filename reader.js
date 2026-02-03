@@ -12,7 +12,7 @@ if (!showUI) {
     document.documentElement.classList.add('headless-mode')
 }
 
-const getCSS = ({ spacing, justify, hyphenate, colors, isDark }) => {
+const getCSS = ({ spacing, justify, hyphenate, colors, isDark, fontSizePx }) => {
     const background = colors?.background ?? 'Canvas'
     const foreground = colors?.foreground ?? 'CanvasText'
     const muted = colors?.muted ?? 'GrayText'
@@ -20,12 +20,16 @@ const getCSS = ({ spacing, justify, hyphenate, colors, isDark }) => {
     const colorScheme = typeof isDark === 'boolean'
         ? (isDark ? 'dark' : 'light')
         : 'light dark'
+    const normalizedFontSizePx = (typeof fontSizePx === 'number' && Number.isFinite(fontSizePx))
+        ? fontSizePx
+        : 16
     return `
     @namespace epub "http://www.idpf.org/2007/ops";
     html {
         color-scheme: ${colorScheme};
         background: ${background};
         color: ${foreground};
+        font-size: ${normalizedFontSizePx}px;
     }
     /* https://github.com/whatwg/html/issues/5426 */
     @media (prefers-color-scheme: dark) {
@@ -36,6 +40,7 @@ const getCSS = ({ spacing, justify, hyphenate, colors, isDark }) => {
     body {
         background: ${background};
         color: ${foreground};
+        font-size: ${normalizedFontSizePx}px;
     }
     a:link, a:visited {
         color: ${foreground};
@@ -107,11 +112,12 @@ class Reader {
         }
     }
     style = {
-        spacing: 1.4,
+        spacing: 1.6,
         justify: true,
         hyphenate: true,
         colors: undefined,
         isDark: undefined,
+        fontSizePx: 16,
     }
     annotations = new Map()
     annotationsByValue = new Map()
@@ -178,6 +184,16 @@ class Reader {
             this.style.isDark = initialTheme.isDark
         }
 
+        const initialFontSize = globalThis.__auraFontSize
+        if (typeof initialFontSize === 'number' && Number.isFinite(initialFontSize)) {
+            this.style.fontSizePx = initialFontSize
+        }
+
+        const initialLineHeight = globalThis.__auraLineHeight
+        if (typeof initialLineHeight === 'number' && Number.isFinite(initialLineHeight)) {
+            this.style.spacing = initialLineHeight
+        }
+
         window.addEventListener('aura-theme-change', event => {
             const theme = event?.detail
             if (!theme) return
@@ -188,6 +204,20 @@ class Reader {
                 border: theme.border,
             }
             this.style.isDark = theme.isDark
+            this.#applyStyles()
+        })
+
+        window.addEventListener('aura-font-size-change', event => {
+            const fontSize = event?.detail?.fontSize
+            if (typeof fontSize !== 'number' || !Number.isFinite(fontSize)) return
+            this.style.fontSizePx = fontSize
+            this.#applyStyles()
+        })
+
+        window.addEventListener('aura-line-height-change', event => {
+            const lineHeight = event?.detail?.lineHeight
+            if (typeof lineHeight !== 'number' || !Number.isFinite(lineHeight)) return
+            this.style.spacing = lineHeight
             this.#applyStyles()
         })
     }
